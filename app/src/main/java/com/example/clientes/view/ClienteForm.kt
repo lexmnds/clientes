@@ -56,6 +56,9 @@ import com.example.clientes.viewModel.RegistroCliente
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
+import java.util.TimeZone
+import androidx.compose.runtime.*
+import java.util.Calendar
 
 @SuppressLint("UnusedMaterial3ScaffoldPaddingParameter")
 @OptIn(ExperimentalMaterial3Api::class)
@@ -148,19 +151,12 @@ fun ClienteForm(navController: NavController, viewModel: RegistroCliente){
 @Composable
 fun DateField(cliente: Cliente, viewModel: RegistroCliente){
     var showDatePicker by remember { mutableStateOf(false) }
-
-    // Usamos un solo state para el datePicker
-    val datePickerState = rememberDatePickerState(initialSelectedDateMillis = convertDateToMillis(cliente.fechaRegistro))
-
-    // Estado para manejar la fecha seleccionada
+    val datePickerState = rememberDatePickerState()
     var selectedDate by remember { mutableStateOf(cliente.fechaRegistro) }
 
-    // Fecha que se mostrará en el TextField
-    val displayDate = selectedDate
-
     OutlinedTextField(
-        value = displayDate,
-        onValueChange = { }, // No actualizamos el valor aquí porque el campo es solo lectura
+        value = selectedDate,
+        onValueChange = { },
         label = { Text("Fecha registro") },
         readOnly = true,
         trailingIcon = {
@@ -177,7 +173,6 @@ fun DateField(cliente: Cliente, viewModel: RegistroCliente){
             .height(64.dp)
     )
 
-    // Mostrar el DatePicker cuando showDatePicker sea true
     if (showDatePicker) {
         Popup(
             onDismissRequest = { showDatePicker = false },
@@ -203,12 +198,27 @@ fun DateField(cliente: Cliente, viewModel: RegistroCliente){
                     ) {
                         Button(
                             onClick = {
-                                datePickerState.selectedDateMillis?.let {
-                                    val formattedDate = convertMillisToDate(it)
-                                    selectedDate = formattedDate // Actualizamos la fecha seleccionada
-                                    viewModel.onInputChange(cliente.copy(fechaRegistro = selectedDate)) // Enviamos el nuevo valor al viewModel
+                                datePickerState.selectedDateMillis?.let { utcMillis ->
+                                    println("Millis obtenidos del DatePicker (UTC): $utcMillis")
+
+                                    val utcCalendar = Calendar.getInstance(TimeZone.getTimeZone("UTC"), Locale.getDefault())
+                                    utcCalendar.timeInMillis = utcMillis
+
+                                    val localCalendar = Calendar.getInstance(TimeZone.getTimeZone("America/Mexico_City"), Locale.getDefault())
+                                    localCalendar.set(
+                                        utcCalendar.get(Calendar.YEAR),
+                                        utcCalendar.get(Calendar.MONTH),
+                                        utcCalendar.get(Calendar.DAY_OF_MONTH)
+                                    )
+
+                                    val formattedDate = SimpleDateFormat("dd/MM/yyyy", Locale.getDefault()).format(localCalendar.time)
+                                    println("Fecha formateada (local): $formattedDate")
+
+                                    selectedDate = formattedDate
+                                    viewModel.onInputChange(cliente.copy(fechaRegistro = selectedDate))
                                     showDatePicker = false
                                 }
+
                             },
                             modifier = Modifier.padding(8.dp)
                         ) {
@@ -217,7 +227,6 @@ fun DateField(cliente: Cliente, viewModel: RegistroCliente){
 
                         Button(
                             onClick = {
-                                selectedDate = cliente.fechaRegistro // Cancelamos y restauramos la fecha original
                                 showDatePicker = false
                             }
                         ) {
@@ -228,16 +237,9 @@ fun DateField(cliente: Cliente, viewModel: RegistroCliente){
             }
         }
     }
-}
 
-// Función para convertir una fecha a milisegundos
-fun convertDateToMillis(dateString: String): Long {
-    val formatter = SimpleDateFormat("dd/MM/yyyy", Locale.getDefault())
-    return try {
-        val date = formatter.parse(dateString)
-        date?.time ?: 0
-    } catch (e: Exception) {
-        0
+    LaunchedEffect(selectedDate) {
+        viewModel.onInputChange(cliente.copy(fechaRegistro = selectedDate))
     }
 }
 
